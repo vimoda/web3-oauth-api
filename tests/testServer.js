@@ -3,11 +3,61 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const authenticateRequestTest = require('./middleware/authenticateRequestTest');
 const nacl = require('tweetnacl');
-const { PublicKey } = require('@solana/web3.js');
+const { Connection, PublicKey } = require('@solana/web3.js');
+const { getAssociatedTokenAddress, getAccount, getMint } = require('@solana/spl-token');
 const jwt = require('jsonwebtoken');
 
 const createTestServer = () => {
   const app = express();
+
+  // Conexiones a Solana (igual que en src/routes/auth.js)
+  const connections = {
+    testnet: new Connection(process.env.SOLANA_TESTNET_RPC || 'https://api.testnet.solana.com', {
+      commitment: 'confirmed',
+      httpHeaders: { 'Retry-After': 500 },
+    }),
+    mainnet: new Connection(process.env.SOLANA_MAINNET_RPC || 'https://api.mainnet-beta.solana.com', {
+      commitment: 'confirmed',
+      httpHeaders: { 'Retry-After': 500 },
+    }),
+  };
+
+  // Cache de balances y decimales (igual que en src/routes/auth.js)
+  const BALANCE_CACHE_TTL_MS = 60 * 1000;
+  const balanceCache = new Map();
+  const tokenDecimalsCache = new Map();
+
+  const getCachedBalance = (cacheKey) => {
+    const cached = balanceCache.get(cacheKey);
+    if (!cached) return null;
+    if (Date.now() - cached.timestamp > BALANCE_CACHE_TTL_MS) {
+      balanceCache.delete(cacheKey);
+      return null;
+    }
+    return cached.value;
+  };
+
+  const setCachedBalance = (cacheKey, value) => {
+    balanceCache.set(cacheKey, { value, timestamp: Date.now() });
+  };
+
+  const getTokenDecimals = async (connection, mintAddress, network) => {
+    const cacheKey = `${network}:${mintAddress}`;
+    if (tokenDecimalsCache.has(cacheKey)) {
+      return tokenDecimalsCache.get(cacheKey);
+    }
+
+    try {
+      const mintInfo = await getMint(connection, new PublicKey(mintAddress));
+      const decimals = Number(mintInfo?.decimals ?? 0);
+      tokenDecimalsCache.set(cacheKey, decimals);
+      return decimals;
+    } catch (error) {
+      console.warn(`No se pudo obtener decimales para el mint ${mintAddress} en ${network}`, error?.message || error);
+      tokenDecimalsCache.set(cacheKey, 0);
+      return 0;
+    }
+  };
 
   // Configuración de middleware
   app.use(cors({ origin: true }));
@@ -68,24 +118,59 @@ const createTestServer = () => {
       }
 
       // Determinar nivel de acceso basado en configuración del desarrollador
+      // Ahora usa validación REAL de balances en Solana
       let highestLevel = null;
       const tokenBalances = {};
       
-      // Para testing, simular validación de tokens
       for (const level of developer.accessLevels) {
+        let meetsRequirements = true;
+        const balances = {};
+
+        const connection = connections[level.network];
+        if (!connection) {
+          meetsRequirements = false;
+          continue;
+        }
+
+        // Si no hay requisitos de tokens, es nivel básico
         if (level.tokenRequirements.length === 0) {
-          // Nivel básico sin requisitos
           highestLevel = level;
-        } else {
-          // Para requisitos de tokens, simular que los tiene
-          let meetsRequirements = true;
-          for (const req of level.tokenRequirements) {
-            // Simular balance suficiente para testing
-            tokenBalances[`${req.tokenMintAddress}:${level.network}`] = req.minAmount + 1;
+          continue;
+        }
+
+        // Validar cada requisito de token consultando Solana
+        for (const req of level.tokenRequirements) {
+          const cacheKey = `balance:${publicKey}:${req.tokenMintAddress}:${level.network}`;
+          const decimals = await getTokenDecimals(connection, req.tokenMintAddress, level.network);
+          let balance = getCachedBalance(cacheKey);
+
+          if (balance === null) {
+            try {
+              const tokenAccount = await getAssociatedTokenAddress(
+                new PublicKey(req.tokenMintAddress),
+                new PublicKey(publicKey)
+              );
+              const accountInfo = await getAccount(connection, tokenAccount);
+              const rawAmount = accountInfo?.amount ? Number(accountInfo.amount) : 0;
+              balance = rawAmount / 10 ** decimals;
+            } catch (error) {
+              console.log(`No se encontró cuenta de token para ${req.tokenMintAddress} en ${level.network}:`, error.message);
+              balance = 0;
+            }
+
+            setCachedBalance(cacheKey, balance);
           }
-          if (meetsRequirements) {
-            highestLevel = level;
+
+          balances[req.tokenMintAddress] = balance;
+          tokenBalances[`${req.tokenMintAddress}:${level.network}`] = balance;
+          
+          if (balance < req.minAmount) {
+            meetsRequirements = false;
           }
+        }
+
+        if (meetsRequirements && (!highestLevel || developer.accessLevels.indexOf(level) > developer.accessLevels.indexOf(highestLevel))) {
+          highestLevel = level;
         }
       }
 

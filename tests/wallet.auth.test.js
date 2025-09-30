@@ -1,6 +1,7 @@
 const request = require('supertest');
 const crypto = require('crypto');
 const nacl = require('tweetnacl');
+const { Keypair } = require('@solana/web3.js');
 const createTestServer = require('./testServer');
 const MockDeveloper = require('./mocks/Developer');
 
@@ -23,10 +24,18 @@ describe('Wallet Authentication', () => {
   test('debería simular autenticación de wallet', async () => {
     const message = `Autenticación para ${global.TEST_CONFIG.API_KEY} en ${new Date().toISOString()}`;
     
+    // Generar un par de claves Solana válido para testing
+    const keypair = Keypair.generate();
+    const publicKey = keypair.publicKey.toString();
+    
+    // Firmar el mensaje con la clave privada
+    const messageBytes = new TextEncoder().encode(message);
+    const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+    
     const body = {
       apiKey: global.TEST_CONFIG.API_KEY,
-      publicKey: 'mock-public-key',
-      signature: 'mock-signature',
+      publicKey: publicKey,
+      signature: Array.from(signature),
       message
     };
 
@@ -42,8 +51,10 @@ describe('Wallet Authentication', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.accessToken).toBe('mock-access-token');
-  });
+    expect(response.body.accessToken).toBeDefined();
+    expect(response.body.level).toBeDefined();
+    expect(response.body.tokenBalances).toBeDefined();
+  }, 30000); // Increased timeout to 30 seconds for Solana RPC calls
 
   test('debería rechazar datos de wallet incompletos', async () => {
     const body = {
