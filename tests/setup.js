@@ -24,7 +24,7 @@ afterEach(async () => {
     accessLevels: [
       {
         levelName: 'basic',
-        network: 'testnet',
+        network: 'mainnet',
         tokenRequirements: []
       }
     ]
