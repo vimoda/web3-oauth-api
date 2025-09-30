@@ -1,0 +1,44 @@
+version: '3.8'
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - web3-oauth-network
+    restart: unless-stopped
+
+  # mongodb:
+  #   image: mongo:6.0
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb-data:/data/db
+  #   networks:
+  #     - web3-oauth-network
+  #   restart: unless-stopped
+
+  # redis:
+  #   image: redis:7.0
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - web3-oauth-network
+  #   restart: unless-stopped
+
+networks:
+  web3-oauth-network:
+    driver: bridge
+
+volumes:
+  mongodb-data:
+  redis-data:
