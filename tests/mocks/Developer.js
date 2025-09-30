@@ -46,9 +46,13 @@ MockDeveloper.create({
       network: 'mainnet',
       tokenRequirements: [
         {
-          tokenMintAddress: 'So11111111111111111111111111111111111111112', // Wrapped SOL
-          minAmount: 0.3
-        }
+          tokenMintAddress: 'jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v', // jupSOL
+          minAmount: 0.00000001
+        },
+        // {
+        //   tokenMintAddress: 'So11111111111111111111111111111111111111112', // SOL
+        //   minAmount: 0.3
+        // }
       ]
     }
   ]

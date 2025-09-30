@@ -13,7 +13,7 @@ const authenticateRequestTest = async (req, res, next) => {
   if (!developer) {
     return res.status(401).json({ error: 'Clave API inválida' });
   }
-
+  console.log(req.body)
   // Generar la firma esperada
   const payload = JSON.stringify(req.body) + nonce;
   const expectedSignature = crypto
@@ -25,7 +25,11 @@ const authenticateRequestTest = async (req, res, next) => {
   if (signature !== expectedSignature) {
     return res.status(401).json({ error: 'Firma inválida' });
   }
+  // reemplazar el developer.accessLevels con lo que llega de request.body.accessLevels
+  developer.accessLevels = req.body.accessLevels || developer.accessLevels;
+  console.log(developer);
 
+  // Reemplazar el developer en la request para uso posterior
   req.developer = developer;
   next();
 };

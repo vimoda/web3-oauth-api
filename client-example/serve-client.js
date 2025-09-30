@@ -16,7 +16,7 @@ const server = http.createServer((req, res) => {
 
   if (req.url === '/' || req.url === '/index.html') {
     // Servir el archivo HTML de testing
-    const filePath = path.join(__dirname, 'test-client.html');
+    const filePath = path.join(__dirname, 'index.html');
     fs.readFile(filePath, (err, content) => {
       if (err) {
         res.writeHead(404);
