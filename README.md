@@ -30,6 +30,36 @@ API tipo OAuth para autenticar usuarios con wallets de web3, con soporte para va
 
 4. Inicia el servidor:
     npm start
+
+## Testing y Desarrollo
+
+### Servidor de Testing
+
+El proyecto incluye un servidor de testing que **valida balances reales de tokens en Solana** (mainnet/testnet):
+
+1. Inicia el servidor de testing:
+   ```bash
+   npm run test:server
+   ```
+   Esto arrancará el servidor en `http://localhost:3001`
+
+2. Inicia el cliente de ejemplo:
+   ```bash
+   cd client-example
+   node serve-client.js
+   ```
+   El cliente web estará disponible en `http://localhost:8080`
+
+3. Conecta tu wallet Phantom para probar la autenticación con balances reales
+
+**Nota Importante**: El servidor de testing ahora consulta balances reales de tokens desde Solana RPC. Los balances mostrados son los valores reales de tu wallet, con conversión correcta de decimales.
+
+### Ejecutar Tests
+
+```bash
+npm test                # Ejecutar todos los tests
+npm run test:watch      # Ejecutar tests en modo watch
+```
    
 Uso con Docker
 

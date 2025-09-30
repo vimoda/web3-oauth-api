@@ -24,30 +24,12 @@ afterEach(async () => {
     accessLevels: [
       {
         levelName: 'basic',
-        network: 'testnet',
+        network: 'mainnet',
         tokenRequirements: []
       }
     ]
   });
 });
-
-// Mock para evitar conexiones reales a Solana durante tests
-jest.mock('@solana/web3.js', () => ({
-  Connection: jest.fn().mockImplementation(() => ({
-    getAccountInfo: jest.fn(),
-    getTokenAccountsByOwner: jest.fn(),
-  })),
-  PublicKey: jest.fn().mockImplementation((key) => ({
-    toString: () => key,
-    toBuffer: () => Buffer.from(key, 'base64'),
-  })),
-}));
-
-jest.mock('@solana/spl-token', () => ({
-  getAssociatedTokenAddress: jest.fn().mockResolvedValue('mocked-token-address'),
-  getAccount: jest.fn().mockResolvedValue({ amount: BigInt(1000) }),
-  getMint: jest.fn().mockResolvedValue({ decimals: 9 }),
-}));
 
 // Variables globales para tests
 global.TEST_CONFIG = {
