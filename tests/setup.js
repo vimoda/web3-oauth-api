@@ -46,6 +46,7 @@ jest.mock('@solana/web3.js', () => ({
 jest.mock('@solana/spl-token', () => ({
   getAssociatedTokenAddress: jest.fn().mockResolvedValue('mocked-token-address'),
   getAccount: jest.fn().mockResolvedValue({ amount: BigInt(1000) }),
+  getMint: jest.fn().mockResolvedValue({ decimals: 9 }),
 }));
 
 // Variables globales para tests

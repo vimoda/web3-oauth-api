@@ -1,6 +1,6 @@
 const express = require('express');
 const { Connection, PublicKey } = require('@solana/web3.js');
-const { getAssociatedTokenAddress, getAccount } = require('@solana/spl-token');
+const { getAssociatedTokenAddress, getAccount, getMint } = require('@solana/spl-token');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const nacl = require('tweetnacl');
@@ -23,8 +23,41 @@ const connections = {
   }),
 };
 
-// const client = redis.createClient({ url: process.env.REDIS_URI || 'redis://redis:6379' });
-// client.connect().catch((err) => console.error('Error al conectar a Redis:', err));
+const BALANCE_CACHE_TTL_MS = 60 * 1000;
+const balanceCache = new Map();
+const tokenDecimalsCache = new Map();
+
+const getCachedBalance = (cacheKey) => {
+  const cached = balanceCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > BALANCE_CACHE_TTL_MS) {
+    balanceCache.delete(cacheKey);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedBalance = (cacheKey, value) => {
+  balanceCache.set(cacheKey, { value, timestamp: Date.now() });
+};
+
+const getTokenDecimals = async (connection, mintAddress, network) => {
+  const cacheKey = `${network}:${mintAddress}`;
+  if (tokenDecimalsCache.has(cacheKey)) {
+    return tokenDecimalsCache.get(cacheKey);
+  }
+
+  try {
+    const mintInfo = await getMint(connection, new PublicKey(mintAddress));
+    const decimals = Number(mintInfo?.decimals ?? 0);
+    tokenDecimalsCache.set(cacheKey, decimals);
+    return decimals;
+  } catch (error) {
+    console.warn(`No se pudo obtener decimales para el mint ${mintAddress} en ${network}`, error?.message || error);
+    tokenDecimalsCache.set(cacheKey, 0);
+    return 0;
+  }
+};
 
 // // Registro de desarrolladores
 // router.post('/register', async (req, res) => {
@@ -74,22 +107,23 @@ router.post('/authenticate', authenticateRequest, async (req, res) => {
 
     for (const req of level.tokenRequirements) {
       const cacheKey = `balance:${publicKey}:${req.tokenMintAddress}:${level.network}`;
-      let balance = await client.get(cacheKey);
+      const decimals = await getTokenDecimals(connection, req.tokenMintAddress, level.network);
+      let balance = getCachedBalance(cacheKey);
 
-      if (!balance) {
-        const tokenAccount = await getAssociatedTokenAddress(
-          new PublicKey(req.tokenMintAddress),
-          new PublicKey(publicKey)
-        );
+      if (balance === null) {
         try {
+          const tokenAccount = await getAssociatedTokenAddress(
+            new PublicKey(req.tokenMintAddress),
+            new PublicKey(publicKey)
+          );
           const accountInfo = await getAccount(connection, tokenAccount);
-          balance = Number(accountInfo.amount);
-          await client.setEx(cacheKey, 60, balance.toString());
+          const rawAmount = accountInfo?.amount ? Number(accountInfo.amount) : 0;
+          balance = rawAmount / 10 ** decimals;
         } catch (error) {
           balance = 0;
         }
-      } else {
-        balance = Number(balance);
+
+        setCachedBalance(cacheKey, balance);
       }
 
       balances[req.tokenMintAddress] = balance;
